@@ -65,6 +65,7 @@ services:
       - /data/instock/patches/job/strategy_data_daily_job.py:/data/InStock/instock/job/strategy_data_daily_job.py:ro
       - /data/instock/patches/job/backtest_data_daily_job.py:/data/InStock/instock/job/backtest_data_daily_job.py:ro
       - /data/instock/patches/job/kline_delta_increment.py:/data/InStock/instock/job/kline_delta_increment.py:ro
+      - /data/instock/patches/job/basic_data_other_daily_job.py:/data/InStock/instock/job/basic_data_other_daily_job.py:ro
 
 networks:
   instock-net:
