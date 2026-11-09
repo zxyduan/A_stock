@@ -145,6 +145,14 @@ def work(item):
 def main():
     ensure_table()
     before = count_rows()
+    # 预热进程内 @lru_cache 市场代码映射；首次冷建约 2-3 分钟（分页+限频 sleep），
+    # 必须在多线程之前同步完成，避免并发冷建与重复请求。预热失败不阻断后续抓取。
+    t0 = time.time()
+    try:
+        she.code_id_map_em()
+        log("warmup code_id_map_em done %.1fs" % (time.time() - t0))
+    except Exception as e:
+        log("warmup code_id_map_em failed, continue: %s" % repr(e)[:160])
     pool = stock_pool()
     if LIMIT and LIMIT > 0:
         pool = pool[:LIMIT]
