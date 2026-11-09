@@ -52,6 +52,18 @@ services:
       # 完整长字段请求被东财以 Content-Encoding:br 返回, r.text 无法解码, r.json() 抛 "Expecting value char 0"。
       # 只读挂载仅把该请求头降级为 gzip,deflate 的修复版, 其余代码与镜像内一致。
       - /data/instock/patches/eastmoney_fetcher.py:/data/InStock/instock/core/eastmoney_fetcher.py:ro
+      - /data/instock/patches/core/stockfetch.py:/data/InStock/instock/core/stockfetch.py:ro
+      - /data/instock/patches/core/indicator/calculate_indicator.py:/data/InStock/instock/core/indicator/calculate_indicator.py:ro
+      - /data/instock/patches/core/strategy/backtrace_ma250.py:/data/InStock/instock/core/strategy/backtrace_ma250.py:ro
+      - /data/instock/patches/core/strategy/climax_limitdown.py:/data/InStock/instock/core/strategy/climax_limitdown.py:ro
+      - /data/instock/patches/core/strategy/enter.py:/data/InStock/instock/core/strategy/enter.py:ro
+      - /data/instock/patches/core/strategy/keep_increasing.py:/data/InStock/instock/core/strategy/keep_increasing.py:ro
+      - /data/instock/patches/core/strategy/breakthrough_platform.py:/data/InStock/instock/core/strategy/breakthrough_platform.py:ro
+      - /data/instock/patches/job/execute_daily_job.py:/data/InStock/instock/job/execute_daily_job.py:ro
+      - /data/instock/patches/job/indicators_data_daily_job.py:/data/InStock/instock/job/indicators_data_daily_job.py:ro
+      - /data/instock/patches/job/klinepattern_data_daily_job.py:/data/InStock/instock/job/klinepattern_data_daily_job.py:ro
+      - /data/instock/patches/job/strategy_data_daily_job.py:/data/InStock/instock/job/strategy_data_daily_job.py:ro
+      - /data/instock/patches/job/backtest_data_daily_job.py:/data/InStock/instock/job/backtest_data_daily_job.py:ro
 
 networks:
   instock-net:
