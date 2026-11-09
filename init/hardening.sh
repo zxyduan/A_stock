@@ -15,11 +15,11 @@ free -h
 swapon --show
 
 echo "== 2 run one backup =="
-sh /data/instock/backup_db.sh
+sh /data/instock/ops/backup_db.sh
 ls -lh /data/instock/backup/
 
 echo "== 3 install daily backup crontab (03:17) =="
-( crontab -l 2>/dev/null | grep -v backup_db.sh; echo '17 3 * * * /data/instock/backup_db.sh >> /data/instock/backup/backup.log 2>&1' ) | crontab -
+( crontab -l 2>/dev/null | grep -v backup_db.sh; echo '17 3 * * * /data/instock/ops/backup_db.sh >> /data/instock/backup/backup.log 2>&1' ) | crontab -
 echo "--- root crontab ---"; crontab -l
 
 echo "== 4 builder prune (unused build cache only) =="

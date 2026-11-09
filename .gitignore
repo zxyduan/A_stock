@@ -16,14 +16,17 @@ __pycache__/
 eastmoney_cookie.txt
 proxy.txt
 
-# 上游 zip 只读快照（内容未改，避免重复占库；来源见 README.md）
+# 上游源码只读快照 / 构建上下文（磁盘保留用于镜像重建，不占 Git）
 build/stock/
-src/stock-master/
+src/
+
+# Dockerfile 中间产物与一次性脚本归档目录（留痕但不入库）
+build/Dockerfile.new
+build/Dockerfile.bak-orig
+.archive-oneoff/
 
 # 临时文件
 *.tmp
-
-# 上游源码压缩包（归档不重复入库）
 *.tar.gz
 *.tgz
 *.zip

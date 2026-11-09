@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #==========================================================================
-# InStock 统一运维脚本（宿主 /data/instock/ops.sh，bash 执行）
+# InStock 统一运维脚本（宿主 /data/instock/ops/ops.sh，bash 执行）
 # 用法: bash ops.sh <子命令> [参数]
 # 只读/安全操作直接跑; 写操作(backup-restore/cache-clear/job-*/kline-run)有明确子命令
 #==========================================================================
@@ -129,7 +129,7 @@ cmd_kline_stop(){
   for p in $(docker top "$APP" 2>/dev/null | grep kline_history_loader | awk '{print $2}'); do kill "$p" 2>/dev/null && echo "killed $p"; done
 }
 
-cmd_backup_now(){ bash "$COMPOSE_DIR/backup_db.sh"; }
+cmd_backup_now(){ bash "$COMPOSE_DIR/ops/backup_db.sh"; }
 cmd_backup_list(){ ls -lh "$COMPOSE_DIR"/backup/*.sql.gz 2>/dev/null; }
 cmd_backup_restore(){
   if [ "$2" = "--confirm" ]; then local f="$3"; else local f="$2"; local confirm="$2"; fi
