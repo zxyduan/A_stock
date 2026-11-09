@@ -35,7 +35,7 @@ services:
       instockdb:
         condition: service_healthy
     ports:
-      - "9988:9988"
+      - "127.0.0.1:9988:9988"
     environment:
       db_host: InStockDbService
       db_user: root
@@ -67,6 +67,7 @@ services:
       - /data/instock/patches/job/kline_delta_increment.py:/data/InStock/instock/job/kline_delta_increment.py:ro
       - /data/instock/patches/job/basic_data_other_daily_job.py:/data/InStock/instock/job/basic_data_other_daily_job.py:ro
       - /data/instock/patches/web/dataTableHandler.py:/data/InStock/instock/web/dataTableHandler.py:ro
+      - /data/instock/patches/web/web_service.py:/data/InStock/instock/web/web_service.py:ro
 
 networks:
   instock-net:
