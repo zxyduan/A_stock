@@ -1,0 +1,58 @@
+# InStock 部署编排（纠偏版，部署在 /data/instock/docker-compose.yml）
+# 与上游 docker-compose.yml 的关键差异：
+#  1) MariaDB 数据卷挂载到官方真实目录 /var/lib/mysql（上游误写 /var/lib/instockdb，会导致数据不落宿主机持久化目录）
+#  2) 两个容器均 restart: always，服务器重启/异常退出后自愈
+#  3) db 增加 healthcheck，app 等数据库真正就绪后再启动，避免初始化作业抢跑失败
+#  4) 挂出应用日志目录与缓存目录，便于不进容器直接看日志；挂载 proxy / cookie 占位文件（留空=直连）
+#  5) 显式传入 db_user/db_password/db_database/db_port，避免依赖镜像内默认值
+services:
+  instockdb:
+    image: mariadb:latest
+    container_name: InStockDbService
+    restart: always
+    networks:
+      - instock-net
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: instockdb
+      TZ: Asia/Shanghai
+    volumes:
+      - /data/instock/mariadb/data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -uroot -proot 2>/dev/null || mysqladmin ping -h 127.0.0.1 -uroot -proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 20s
+
+  instock:
+    image: mayanghua/instock:latest
+    container_name: InStock
+    restart: always
+    networks:
+      - instock-net
+    depends_on:
+      instockdb:
+        condition: service_healthy
+    ports:
+      - "9988:9988"
+    environment:
+      db_host: InStockDbService
+      db_user: root
+      db_password: root
+      db_database: instockdb
+      db_port: "3306"
+      TZ: Asia/Shanghai
+    volumes:
+      - /data/instock/proxy.txt:/data/InStock/instock/config/proxy.txt
+      - /data/instock/eastmoney_cookie.txt:/data/InStock/instock/config/eastmoney_cookie.txt
+      - /data/instock/app/log:/data/InStock/instock/log
+      - /data/instock/app/cache:/data/InStock/instock/cache
+      # 修复: 上游 eastmoney_fetcher.py 硬声明 Accept-Encoding 含 br,zstd, 但镜像未装 brotli 解压库;
+      # 完整长字段请求被东财以 Content-Encoding:br 返回, r.text 无法解码, r.json() 抛 "Expecting value char 0"。
+      # 只读挂载仅把该请求头降级为 gzip,deflate 的修复版, 其余代码与镜像内一致。
+      - /data/instock/patches/eastmoney_fetcher.py:/data/InStock/instock/core/eastmoney_fetcher.py:ro
+
+networks:
+  instock-net:
+    driver: bridge
