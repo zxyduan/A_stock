@@ -13,14 +13,15 @@ em_financial_loader.py —— #1 季度财务关键科目【DRY 骨架，2026-11
   1) FIN_DRY_RUN 默认 1：只拉取/合并/打印样例，不连库写；
   2) 目标表 cn_stock_financial_quarter 不存在即中止写库（本批不建表、不 APPLY）；
   3) 金额保留源原值（实测单位=元），不做 ×1e4/×100 缩放；比率口径见列 COMMENT；
-  4) 正式放量前需把下方写库段替换为 ON DUPLICATE KEY UPDATE（见 F1 规格 §3.1/§7）。
+  4) 写库段已用 ON DUPLICATE KEY UPDATE(upsert_many)；但表不存在即中止、FIN_DRY_RUN 默认1，
+     本批不建表不写库；正式放量仍需先建表、小样本灰度、确认三表按 code+report_date 对齐。
 
 环境变量：
   FIN_DRY_RUN=1(默认)
-  FIN_LIMIT=20              DRY 演示最大合并行数
+  FIN_LIMIT=20              DRY 演示每个报表最大行数；正式 APPLY 设 0=不限
   FIN_A_SHARE_ONLY=1(默认) 仅保留沪深A股(0/3/6段),剔除北交所/三板
-  FIN_CODE=""               单只调试，如 600519；留空=各报表首页抽样
-  FIN_REPORT_DATES=""       逗号分隔季末(yyyy-mm-dd)；正式放量用，骨架不据此翻全历史
+  FIN_CODE=""               单只调试(客户端过滤;报表不支持服务端SECURITY_CODE过滤)
+  FIN_REPORT_DATES=""       逗号分隔季末(yyyy-mm-dd)服务端过滤,如 2025-12-31,2024-12-31;留空=首页抽样
   FIN_SOURCE=all            main/income/balance/cashflow/all
 """
 import os
@@ -131,6 +132,16 @@ def merge_one(bucket):
     out["fin_nbv_life"] = _num(main, "NBV_LIFE")
     out["fin_nbv_rate"] = _num(main, "NBV_RATE")
 
+    # 金融裁剪：金融行清空工业经营/应收存货科目；非金融行清空金融专用列，防源错位污染
+    if out["is_financial"]:
+        for c in ("accounts_receivable", "inventory", "fixed_asset",
+                  "accounts_payable", "sales_cash"):
+            out[c] = None
+    else:
+        for c in ("fin_loans", "fin_deposits", "fin_npl_ratio", "fin_car",
+                  "fin_nbv_life", "fin_nbv_rate"):
+            out[c] = None
+
     out["source"] = "EM_DATACENTER"
     out["raw_json"] = ec.raw_json({"main": main, "income": inc,
                                    "balance": bal, "cashflow": cf})
@@ -141,25 +152,44 @@ def main():
     dry = ec.env_flag("FIN_DRY_RUN", True)
     limit = ec.env_int("FIN_LIMIT", 20)
     code = os.environ.get("FIN_CODE", "").strip()
+    dates = [d.strip() for d in os.environ.get("FIN_REPORT_DATES", "")
+             .replace(" ", "").split(",") if d.strip()]
     source = os.environ.get("FIN_SOURCE", "all").strip().lower()
     keys = ["main", "income", "balance", "cashflow"] if source == "all" else [source]
-    flt = '(SECURITY_CODE="%s")' % code if code else None
+
+    # 实测(2026-11-10)：四张财务报表仅接受 REPORT_DATE 服务端过滤；SECURITY_CODE 触发
+    # “参数预处理错误”，且不支持双条件拼接；FIN_CODE 改为客户端过滤，不进服务端 filter。
+    def filters():
+        if dates:
+            return ["(REPORT_DATE='%s')" % d for d in dates]
+        return [None]
 
     bucket = {}
     for k in keys:
-        rows = ec.dc_fetch(REPORTS[k], extra_filter=flt, max_rows=limit)
-        ec.log(TAG, "report=%s rows=%d (dry=%s filter=%s)" % (k, len(rows), dry, code or "home"))
-        for r in rows[:limit]:
-            kk = (r.get("SECURITY_CODE"), ec.to_date(r.get("REPORT_DATE")))
-            bucket.setdefault(kk, {})[k] = r
+        n = 0
+        kept_code = 0
+        for flt in filters():
+            rows = ec.dc_fetch(REPORTS[k], extra_filter=flt, max_rows=limit or None)
+            n += len(rows)
+            rows = rows[:limit] if limit else rows
+            for r in rows:
+                if code and r.get("SECURITY_CODE") != code:
+                    continue
+                kept_code += 1
+                kk = (r.get("SECURITY_CODE"), ec.to_date(r.get("REPORT_DATE")))
+                bucket.setdefault(kk, {})[k] = r
+        ec.log(TAG, "report=%s rows=%d code_match=%d dry=%s code=%s dates=%d"
+               % (k, n, kept_code, dry, code or "-", len(dates)))
 
     only_a = ec.env_flag("FIN_A_SHARE_ONLY", True)
     merged = [merge_one(b) for b in bucket.values()]
     pre = len(merged)
     if only_a:
         merged = [m for m in merged if ec.is_a_share(m["code"])]
-    ec.log(TAG, "merged_groups=%d a_share_only=%s kept=%d dropped=%d dry_run=%s"
-           % (pre, only_a, len(merged), pre - len(merged), dry))
+    full = sum(1 for b in bucket.values()
+               if all(x in b for x in ("main", "income", "balance", "cashflow")))
+    ec.log(TAG, "merged_groups=%d four_table_full=%d a_share_only=%s kept=%d dropped=%d dry_run=%s"
+           % (pre, full, only_a, len(merged), pre - len(merged), dry))
 
     if dry:
         for m in merged[:3]:
@@ -169,18 +199,18 @@ def main():
                     "灰度 FIN_LIMIT -> 替换为 ON DUPLICATE KEY UPDATE 后放量")
         return
 
-    # —— 写库段（本批不触发：表不存在即中止；正式版改 upsert）——
+    # —— 写库段：表不存在即中止；ON DUPLICATE KEY UPDATE 刷新修订值（仍需先建表并显式 APPLY）——
     conn = ec.conn()
     cur = conn.cursor()
     if not ec.table_exists(cur, TABLE):
-        ec.log(TAG, "目标表 %s 不存在：先执行 gap_financial_ddl_review.sql，已中止写库" % TABLE)
+        ec.log(TAG, "目标表 %s 不存在：先执行 gap_financial_ddl_review.sql 建表，已中止写库" % TABLE)
         conn.close()
         return
-    # TODO(放量前): 改为 ON DUPLICATE KEY UPDATE；当前 INSERT IGNORE 仅占位，避免补列被跳过
-    n = ec.insert_ignore(cur, TABLE, COLS, merged)
+    upd = [c for c in COLS if c not in ("code", "report_date")]
+    n = ec.upsert_many(cur, TABLE, COLS, merged, update_columns=upd)
     conn.commit()
     conn.close()
-    ec.log(TAG, "upsert/insert rows=%d" % n)
+    ec.log(TAG, "upsert rows=%d (ON DUPLICATE KEY UPDATE; PK code+report_date)" % n)
 
 
 if __name__ == "__main__":

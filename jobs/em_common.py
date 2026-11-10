@@ -184,6 +184,32 @@ def insert_ignore(cur, table, columns, rows):
     return cur.rowcount
 
 
+# 主键列保护名单：upsert 刷新普通列，绝不回写主键（调用方也可自行传 update_columns 收窄）
+_PK_GUARD = ("code", "report_date", "date", "index_code", "event_date")
+
+
+def upsert_many(cur, table, columns, rows, update_columns=None):
+    """ON DUPLICATE KEY UPDATE：同主键存在则刷新普通列（适合财报修订/补录场景）。
+
+    返回处理条数 len(rows)，不依赖 MySQL 1(insert)/2(update) 的 rowcount 语义差异。
+    update_columns 缺省=全部 columns 剔除 _PK_GUARD；主键列始终不出现在 SET 子句。
+    与 insert_ignore 并列存在：事件/快照类幂等去重仍用 IGNORE，季度修订类用 upsert。
+    """
+    if not rows:
+        return 0
+    cols = list(columns)
+    if update_columns is None:
+        update_columns = [c for c in cols if c not in _PK_GUARD]
+    upd = [c for c in update_columns if c not in _PK_GUARD]
+    col_sql = ",".join("`%s`" % c for c in cols)
+    ph = ",".join(["%s"] * len(cols))
+    set_sql = ",".join("`%s`=VALUES(`%s`)" % (c, c) for c in upd)
+    sql = "INSERT INTO `%s` (%s) VALUES (%s) ON DUPLICATE KEY UPDATE %s" % (
+        table, col_sql, ph, set_sql)
+    cur.executemany(sql, [tuple(r.get(c) for c in cols) for r in rows])
+    return len(rows)
+
+
 def log(tag, msg):
     line = "%s [%s] %s" % (time.strftime("%Y-%m-%d %H:%M:%S"), tag, msg)
     print(line, flush=True)
