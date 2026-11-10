@@ -58,6 +58,7 @@ def map_row(x):
 def main():
     dry = ec.env_flag("DIV_DRY_RUN", True)
     limit = ec.env_int("DIV_LIMIT", 0)
+    only_imp = ec.env_flag("DIV_ONLY_IMPLEMENTED", True)
     dates = [d.strip() for d in __import__("os").environ.get("DIV_REPORT_DATES", "").replace(" ", "").split(",") if d.strip()]
 
     raw = []
@@ -76,7 +77,11 @@ def main():
     if limit:
         raw = raw[:limit]
     mapped = [m for m in (map_row(x) for x in raw) if m]
-    ec.log(TAG, "fetched=%d mapped=%d dry_run=%s" % (len(raw), len(mapped), dry))
+    pre = len(mapped)
+    if only_imp:
+        mapped = [m for m in mapped if (m.get("assign_progress") or "") == "实施分配"]
+    ec.log(TAG, "fetched=%d mapped=%d only_implemented=%s kept=%d dropped=%d dry_run=%s"
+           % (len(raw), pre, only_imp, len(mapped), pre - len(mapped), dry))
 
     if dry:
         for m in mapped[:3]:

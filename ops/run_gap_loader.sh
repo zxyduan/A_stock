@@ -21,7 +21,8 @@ case "${1:-}" in
   event)    L=em_event_loader.py;       DRY=EVT_DRY_RUN ;;
   holder)   L=em_holder_loader.py;       DRY=HOLD_DRY_RUN ;;
   org)      L=em_org_holding_loader.py;DRY=ORG_DRY_RUN ;;
-  *) echo "usage: $0 dividend|index|event|holder|org  [APPLY=1]"; exit 2 ;;
+  financial) L=em_financial_loader.py; DRY=FIN_DRY_RUN ;;
+  *) echo "usage: $0 dividend|index|event|holder|org|financial  [APPLY=1]"; exit 2 ;;
 esac
 shift || true
 

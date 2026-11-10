@@ -45,13 +45,18 @@ def map_row(x):
 def main():
     dry = ec.env_flag("EVT_DRY_RUN", True)
     limit = ec.env_int("EVT_LIMIT", 0)
+    only_a = ec.env_flag("EVT_A_SHARE_ONLY", True)
     flt = os.environ.get("EVT_FILTER", "").strip() or None
 
     raw = ec.dc_fetch("RPT_LIFT_STAGE", extra_filter=flt, max_rows=limit or None)
     if limit:
         raw = raw[:limit]
     mapped = [m for m in (map_row(x) for x in raw) if m]
-    ec.log(TAG, "fetched=%d mapped=%d dry_run=%s" % (len(raw), len(mapped), dry))
+    pre = len(mapped)
+    if only_a:
+        mapped = [m for m in mapped if ec.is_a_share(m["code"])]
+    ec.log(TAG, "fetched=%d mapped=%d a_share_only=%s kept=%d dropped=%d dry_run=%s"
+           % (len(raw), pre, only_a, len(mapped), pre - len(mapped), dry))
 
     if dry:
         for m in mapped[:3]:

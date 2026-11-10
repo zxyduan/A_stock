@@ -46,6 +46,7 @@ def map_row(x):
 def main():
     dry = ec.env_flag("HOLD_DRY_RUN", True)
     limit = ec.env_int("HOLD_LIMIT", 0)
+    only_a = ec.env_flag("HOLD_A_SHARE_ONLY", True)
     end = os.environ.get("HOLD_END_DATE", "").strip()
     flt = "(END_DATE='%s')" % end if end else None
 
@@ -54,8 +55,11 @@ def main():
     if limit:
         raw = raw[:limit]
     mapped = [m for m in (map_row(x) for x in raw) if m]
-    ec.log(TAG, "fetched=%d mapped=%d dry_run=%s filter=%s"
-           % (len(raw), len(mapped), dry, flt or "none"))
+    pre = len(mapped)
+    if only_a:
+        mapped = [m for m in mapped if ec.is_a_share(m["code"])]
+    ec.log(TAG, "fetched=%d mapped=%d a_share_only=%s kept=%d dropped=%d dry_run=%s filter=%s"
+           % (len(raw), pre, only_a, len(mapped), pre - len(mapped), dry, flt or "none"))
 
     if dry:
         for m in mapped[:3]:

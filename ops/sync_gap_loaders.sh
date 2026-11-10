@@ -11,7 +11,7 @@ SRC=/data/instock/jobs
 DST=/data/instock/app/cache
 mkdir -p "$DST"
 
-for f in em_common.py em_dividend_loader.py em_index_kline_loader.py em_event_loader.py em_holder_loader.py em_org_holding_loader.py; do
+for f in em_common.py em_dividend_loader.py em_index_kline_loader.py em_event_loader.py em_holder_loader.py em_org_holding_loader.py em_financial_loader.py; do
   if [ ! -f "$SRC/$f" ]; then
     echo "MISSING_SOURCE $SRC/$f"; exit 1
   fi

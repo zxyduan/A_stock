@@ -12,6 +12,7 @@ em_common.py —— 东财缺口补全采集器公共库（P1：#3 分红 / #6 �
 """
 import os
 import json
+import re
 import time
 import requests
 import pymysql
@@ -71,6 +72,16 @@ def to_date(v):
     if not s:
         return None
     return s[:10]
+
+
+# A股代码白名单（沪深主板/中小/创业板/科创板，6位）；排除北交所(8xx/4xx/920)、
+# 老三板/新三板(.NQ, 4/8开头)、B股(900/200)、占位代码；市场过滤默认开启、可被采集器关闭。
+_A_SHARE_RE = re.compile(r"^(?:000|001|002|003|300|301|600|601|603|605|688)\d{3}$")
+
+
+def is_a_share(code):
+    """True=沪深A股(主板/中小/创业板/科创板)；用于剔除北交所/三板/B股/占位。"""
+    return bool(code) and bool(_A_SHARE_RE.match(str(code).strip()))
 
 
 def session():
