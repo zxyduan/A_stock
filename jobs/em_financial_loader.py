@@ -188,8 +188,18 @@ def main():
         merged = [m for m in merged if ec.is_a_share(m["code"])]
     full = sum(1 for b in bucket.values()
                if all(x in b for x in ("main", "income", "balance", "cashflow")))
+    # DRY 可观测性：金融/非金融行数、金融列非空行、关键科目缺失计数（不写库、不改口径）
+    fin_n = sum(1 for m in merged if m["is_financial"] == 1)
+    fin_col_row = sum(1 for m in merged
+                      if any(m[c] is not None for c in
+                             ("fin_loans", "fin_deposits", "fin_npl_ratio", "fin_car",
+                              "fin_nbv_life", "fin_nbv_rate")))
+    ocf_null = sum(1 for m in merged if m["ocf"] is None)
+    asset_null = sum(1 for m in merged if m["total_assets"] is None)
     ec.log(TAG, "merged_groups=%d four_table_full=%d a_share_only=%s kept=%d dropped=%d dry_run=%s"
            % (pre, full, only_a, len(merged), pre - len(merged), dry))
+    ec.log(TAG, "quality fin_rows=%d fin_col_nonnull_rows=%d ocf_null=%d total_assets_null=%d"
+           % (fin_n, fin_col_row, ocf_null, asset_null))
 
     if dry:
         for m in merged[:3]:
