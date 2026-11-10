@@ -11,7 +11,7 @@ SRC=/data/instock/jobs
 DST=/data/instock/app/cache
 mkdir -p "$DST"
 
-for f in em_common.py em_dividend_loader.py em_index_kline_loader.py em_event_loader.py em_holder_loader.py em_org_holding_loader.py em_financial_loader.py; do
+for f in em_common.py em_dividend_loader.py em_index_kline_loader.py em_event_loader.py em_holder_loader.py em_org_holding_loader.py em_financial_loader.py em_valuation_loader.py; do
   if [ ! -f "$SRC/$f" ]; then
     echo "MISSING_SOURCE $SRC/$f"; exit 1
   fi
@@ -26,4 +26,5 @@ echo "  bash /data/instock/ops/run_gap_loader.sh index"
 echo "  bash /data/instock/ops/run_gap_loader.sh event"
 echo "  bash /data/instock/ops/run_gap_loader.sh holder"
 echo "  bash /data/instock/ops/run_gap_loader.sh org"
+echo "  bash /data/instock/ops/run_gap_loader.sh valuation"
 echo "实写前置：先备份 + 执行 gap_ddl_review.sql 对应段；再 APPLY=1 bash ops/run_gap_loader.sh <name>"

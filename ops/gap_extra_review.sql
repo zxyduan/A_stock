@@ -50,6 +50,33 @@ LIMIT 80;
 
 
 -- =============================================================================
+-- 9.3 行业名基数与字面交集（只读；2026-11-10 实测 sel=103 fund=496 精确同名交集=39）
+SELECT (SELECT COUNT(DISTINCT industry) FROM cn_stock_selection) AS sel_distinct,
+       (SELECT COUNT(DISTINCT name) FROM cn_stock_fund_flow_industry) AS fund_distinct;
+
+SELECT COUNT(*) AS exact_name_overlap
+FROM (SELECT DISTINCT industry FROM cn_stock_selection) a
+JOIN (SELECT DISTINCT name FROM cn_stock_fund_flow_industry) b ON a.industry = b.name;
+
+-- 9.4 客观后缀清洗证据（仅去罗马数字 Ⅱ/Ⅲ，不做人工归并；只读；不建表）
+SELECT COUNT(DISTINCT name) AS fund_raw_distinct,
+       COUNT(DISTINCT REPLACE(REPLACE(name, 'Ⅱ', ''), 'Ⅲ', '')) AS fund_suffix_cleaned_distinct
+FROM cn_stock_fund_flow_industry;
+
+SELECT COUNT(*) AS cleaned_overlap_selection
+FROM (SELECT DISTINCT industry FROM cn_stock_selection) a
+JOIN (SELECT DISTINCT REPLACE(REPLACE(name, 'Ⅱ', ''), 'Ⅲ', '') AS cn
+      FROM cn_stock_fund_flow_industry) b ON a.industry = b.cn;
+
+-- 9.5 资金表细分名中未被 selection 字面覆盖的样本（人工映射候选清单，只读；Top 40）
+SELECT DISTINCT f.name
+FROM cn_stock_fund_flow_industry f
+LEFT JOIN (SELECT DISTINCT industry FROM cn_stock_selection) s ON s.industry = f.name
+WHERE s.industry IS NULL
+ORDER BY f.name
+LIMIT 40;
+
+-- =============================================================================
 -- #2 估值历史序列与分位（PE/PB/PS 时序）
 --   结论：免费历史长序列端点不可得（前期探针证伪）；默认只做“截面每日增量累积”，
 --   不承诺回填多年历史；由收盘作业把当日 selection 最新截面的 pe9/pbnewmrq/ps9 落时序表。
@@ -96,6 +123,25 @@ ORDER BY s.code;
 --   ADD COLUMN `price_raw`  decimal(18,4) DEFAULT NULL COMMENT '不复权现价=原 new_price 口径',
 --   ADD COLUMN `price_qfq`  decimal(18,4) DEFAULT NULL COMMENT '与qfq日线对齐的复权参考价(由分析层JOIN回填,非快照原生)';
 -- 未授权前：不改表，只在文档/SQL 层固定“趋势看 qfq 日线、现价看快照 new_price”的读取约定。
+
+-- 10.2 最新截面两套价格口径差异规模（只读；2026-11-10 实测 total=4144 / no_qfq_match=2 / |差|>5%=221）
+SELECT COUNT(*) AS total,
+       SUM(k.close IS NULL) AS no_qfq_match,
+       SUM(k.close IS NOT NULL AND ABS((s.new_price - k.close) / NULLIF(k.close, 0)) > 0.05) AS diff_gt_5pct
+FROM cn_stock_selection s
+LEFT JOIN cn_stock_daily_kline k
+  ON k.code = s.code AND k.date = s.date AND k.adjust = 'qfq'
+WHERE s.date = (SELECT MAX(date) FROM cn_stock_selection);
+
+-- 10.3 差异最大样本（只读；用于定位差异成因=除权除息/次新/复权未对齐，不据此回写价格）
+SELECT s.code, s.name, s.new_price, k.close AS qfq_close,
+       ROUND((s.new_price - k.close) / NULLIF(k.close, 0) * 100, 2) AS diff_pct
+FROM cn_stock_selection s
+JOIN cn_stock_daily_kline k ON k.code = s.code AND k.date = s.date AND k.adjust = 'qfq'
+WHERE s.date = (SELECT MAX(date) FROM cn_stock_selection)
+  AND k.close IS NOT NULL
+ORDER BY ABS((s.new_price - k.close) / NULLIF(k.close, 0)) DESC
+LIMIT 15;
 
 
 -- =============================================================================

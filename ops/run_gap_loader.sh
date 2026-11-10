@@ -9,6 +9,7 @@
 #   bash ops/run_gap_loader.sh index             # 干跑宽基指数
 #   bash ops/run_gap_loader.sh event             # 干跑解禁事件
 #   DIV_LIMIT=20 bash ops/run_gap_loader.sh dividend          # 干跑只看前20条
+#   bash ops/run_gap_loader.sh valuation        # 干跑#2估值截面增量(只读selection,不写库)
 #   APPLY=1 bash ops/run_gap_loader.sh dividend                # 实写(前置:备份+建表)
 # 环境变量透传示例：IDX_START=20210101 APPLY=1 bash ops/run_gap_loader.sh index
 # =============================================================================
@@ -22,7 +23,8 @@ case "${1:-}" in
   holder)   L=em_holder_loader.py;       DRY=HOLD_DRY_RUN ;;
   org)      L=em_org_holding_loader.py;DRY=ORG_DRY_RUN ;;
   financial) L=em_financial_loader.py; DRY=FIN_DRY_RUN ;;
-  *) echo "usage: $0 dividend|index|event|holder|org|financial  [APPLY=1]"; exit 2 ;;
+  valuation) L=em_valuation_loader.py; DRY=VAL_DRY_RUN ;;
+  *) echo "usage: $0 dividend|index|event|holder|org|financial|valuation  [APPLY=1]"; exit 2 ;;
 esac
 shift || true
 
