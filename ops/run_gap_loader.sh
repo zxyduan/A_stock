@@ -16,10 +16,12 @@ set -euo pipefail
 
 APP=InStock
 case "${1:-}" in
-  dividend) L=em_dividend_loader.py; DRY=DIV_DRY_RUN ;;
+  dividend) L=em_dividend_loader.py;     DRY=DIV_DRY_RUN ;;
   index)    L=em_index_kline_loader.py; DRY=IDX_DRY_RUN ;;
-  event)    L=em_event_loader.py;      DRY=EVT_DRY_RUN ;;
-  *) echo "usage: $0 dividend|index|event  [APPLY=1]"; exit 2 ;;
+  event)    L=em_event_loader.py;       DRY=EVT_DRY_RUN ;;
+  holder)   L=em_holder_loader.py;       DRY=HOLD_DRY_RUN ;;
+  org)      L=em_org_holding_loader.py;DRY=ORG_DRY_RUN ;;
+  *) echo "usage: $0 dividend|index|event|holder|org  [APPLY=1]"; exit 2 ;;
 esac
 shift || true
 
