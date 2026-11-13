@@ -18,7 +18,8 @@ em_financial_loader.py —— #1 季度财务关键科目【DRY 骨架，2026-11
 
 环境变量：
   FIN_DRY_RUN=1(默认)
-  FIN_LIMIT=20              DRY 演示每个报表最大行数；正式 APPLY 设 0=不限
+  FIN_LIMIT=20              最终写入/样例条数上限；跨表对齐基于已拉取集合，不在拉取阶段截断。
+                            对齐率验证请设 0=不限(单报告期全量翻页)；灰度写入时再设小条数。
   FIN_A_SHARE_ONLY=1(默认) 仅保留沪深A股(0/3/6段),剔除北交所/三板
   FIN_CODE=""               单只调试(客户端过滤;报表不支持服务端SECURITY_CODE过滤)
   FIN_REPORT_DATES=""       逗号分隔季末(yyyy-mm-dd)服务端过滤,如 2025-12-31,2024-12-31;留空=首页抽样
@@ -165,21 +166,24 @@ def main():
         return [None]
 
     bucket = {}
+    report_codes = {}
     for k in keys:
         n = 0
         kept_code = 0
         for flt in filters():
             rows = ec.dc_fetch(REPORTS[k], extra_filter=flt, max_rows=limit or None)
             n += len(rows)
-            rows = rows[:limit] if limit else rows
+            # 跨表对齐基于已拉取的完整 code 集合；不在拉取阶段按 limit 二次截断，
+            # 否则各报表分页排序不同会导致 code 集合互不重叠(2026-11-13 探针: head500 交集仅 13/1)。
             for r in rows:
                 if code and r.get("SECURITY_CODE") != code:
                     continue
                 kept_code += 1
                 kk = (r.get("SECURITY_CODE"), ec.to_date(r.get("REPORT_DATE")))
                 bucket.setdefault(kk, {})[k] = r
-        ec.log(TAG, "report=%s rows=%d code_match=%d dry=%s code=%s dates=%d"
-               % (k, n, kept_code, dry, code or "-", len(dates)))
+        report_codes[k] = {kk for kk, b in bucket.items() if k in b}
+        ec.log(TAG, "report=%s rows=%d code_match=%d codes=%d dry=%s code=%s dates=%d"
+               % (k, n, kept_code, len(report_codes[k]), dry, code or "-", len(dates)))
 
     only_a = ec.env_flag("FIN_A_SHARE_ONLY", True)
     merged = [merge_one(b) for b in bucket.values()]
@@ -209,7 +213,9 @@ def main():
                     "灰度 FIN_LIMIT -> 替换为 ON DUPLICATE KEY UPDATE 后放量")
         return
 
-    # —— 写库段：表不存在即中止；ON DUPLICATE KEY UPDATE 刷新修订值（仍需先建表并显式 APPLY）——
+    # —— 写库段：表不存在即中止；灰度 FIN_LIMIT 仅截断最终写入条数，不影响上方对齐统计 ——
+    if limit:
+        merged = merged[:limit]
     conn = ec.conn()
     cur = conn.cursor()
     if not ec.table_exists(cur, TABLE):
